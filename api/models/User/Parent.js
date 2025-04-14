@@ -12,7 +12,7 @@ module.exports = {
         },
         email : {
             type : 'string',
-            idEmail : true,
+            isEmail : true,
             unique : true,
             required : true
         },
@@ -39,7 +39,7 @@ module.exports = {
         }
     },
 
-    primaryKey : id,
+    primaryKey : 'id',
 
     beforeCreate : async function(values , proceed) {
         values.id = uuidV4()

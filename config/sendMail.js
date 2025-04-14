@@ -1,12 +1,12 @@
 const nodemailer = require('nodemailer');
-require('dotenv').config()
+require('dotenv').config();
 
 // Configure the email transporter
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.MAIL_USER, 
-    pass: process.env.MAIL_PASSWORD, 
+    user: process.env.MAIL_USER,
+    pass: process.env.MAIL_PASSWORD,
   },
 });
 
@@ -19,13 +19,13 @@ transporter.verify((error, success) => {
   }
 });
 
-function sendWelcomeMessage(email, name) {
+function sendWelcomeMessage(email) {
   const mailOptions = {
     from: process.env.SENDER_MAIL, // Sender address
     to: email, // Receiver address
     subject: 'Welcome to LMS!',
-    text: `Hi ${name}, welcome to our Learning Management System! We're excited to have you on board.`,
-    html: `<h1>Welcome, ${name}!</h1><p>We're excited to have you on board with our Learning Management System.</p>`,
+    text: `Hi , welcome to our Learning Management System! We're excited to have you on board.`,
+    html: `<h1>Welcome!</h1><p>We're excited to have you on board with our Learning Management System.</p>`,
   };
 
   // Send email

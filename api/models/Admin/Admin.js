@@ -14,7 +14,7 @@ module.exports = {
             columnType : 'uuid'
         },
         email : {
-            type : 'strung',
+            type : 'string',
             required : true,
             unique : true,
             isEmail : true
