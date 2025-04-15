@@ -8,7 +8,7 @@ module.exports.routes = {
   //Student Route
 
   'POST /api/student': 'StudentController.create',
-  'GET /api/student': 'StudentController.getByID',
+  'GET /api/student/:id': 'StudentController.getByID',
   'GET /api/student': 'StudentController.getAll',
   'PUT /api/student': 'StudentController.update',
   'DELETE /api/student': 'StudentController.delete',
@@ -16,8 +16,8 @@ module.exports.routes = {
   //Parent Route
 
   'POST /api/parent': 'ParentController.create',
-  'GET /api/parent': 'ParentController.getAll',
   'GET /api/parent/:id': 'ParentController.getByID',
+  'GET /api/parent': 'ParentController.getAll',
   'PUT /api/parent': 'ParentController.update',
   'DELETE /api/parent': 'ParentController.delete',
 };

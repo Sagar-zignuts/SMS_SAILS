@@ -1,8 +1,5 @@
-const jwt = require('jsonwebtoken');
-const validator = require('validatorjs');
-const bcrypt = require('bcrypt');
-const path = require('path');
-const {sendWelcomeMessage} = require('../../config/sendMail')
+const {validator , path , bcrypt , jwt ,redisClient ,DEFAULT_TTL,v4} = sails.config.constant;
+
 
 module.exports = {
   AdminLogin: async function (req, res) {
@@ -21,7 +18,6 @@ module.exports = {
       );
 
       if (validation.fails()) {
-        console.log(validation.errors);
         return res.status(400).json({
           status: 400,
           message: `Field is required : ${validation.errors.all()}`,
@@ -68,7 +64,7 @@ module.exports = {
   StudentLogin: async function (req, res) {
     try {
       const { email, password } = req.body;
-      
+
       const validation = new validator(
         { email, password },
         {
@@ -88,10 +84,7 @@ module.exports = {
         return res.status(400).json({ status: 400, message: 'Wrong email' });
       }
 
-      const result = await bcrypt.compare(
-        password,
-        student.password
-      );
+      const result = await bcrypt.compare(password, student.password);
       if (!result) {
         return res
           .status(400)
@@ -109,8 +102,6 @@ module.exports = {
 
       return res.status(200).json({ status: 200, data: { student, token } });
     } catch (error) {
-      console.log(error.message);
-      
       return res.status(500).json({
         status: 500,
         message: 'Error in server side Authcontroller in user',
@@ -119,96 +110,102 @@ module.exports = {
   },
 
   StudentRegister: async function (req, res) {
-      try {
-  
-        let profilePic = null;
-  
-        // Handle file upload with Skipper
-        req.file('profilePic').upload(
-          {
-            dirname: path.resolve(sails.config.appPath, 'Uploads/profiles'),
-            maxBytes: 5000000,
-            allowedFileTypes: ['image/jpeg', 'image/jpg', 'image/png'],
-          },
-          async (err, uploadedFiles) => {
-            if (err) {
-              return res.status(400).json({
-                status: 400,
-                message: 'File upload error: ' + err.message,
-              });
-            }
-  
-            if (uploadedFiles && uploadedFiles.length > 0) {
-              profilePic = path.relative(sails.config.appPath, uploadedFiles[0].fd);
-            }
+    try {
+      let profilePic = null;
 
-  
-            // Fallback to check raw multipart data
-            const form = req._fileparser.form;
-            form.on('field', (name, value) => {
-              if (!req.body[name]) req.body[name] = value; // Populate missing fields
+      // Handle file upload with Skipper
+      req.file('profilePic').upload(
+        {
+          dirname: path.resolve(sails.config.appPath, 'Uploads/profiles'),
+          maxBytes: 5000000,
+          allowedFileTypes: ['image/jpeg', 'image/jpg', 'image/png'],
+        },
+        async (err, uploadedFiles) => {
+          if (err) {
+            return res.status(400).json({
+              status: 400,
+              message: 'File upload error: ' + err.message,
             });
-  
-            form.on('end', () => {
-              console.log('Multipart form parsing completed');
-            });
-  
-            const { email, className, school, password } = req.body;
-  
-            const validation = new validator({ email, className, school, password }, {
+          }
+
+          if (uploadedFiles && uploadedFiles.length > 0) {
+            profilePic = path.relative(
+              sails.config.appPath,
+              uploadedFiles[0].fd
+            );
+          }
+
+          const { email, className, school, password } = req.body;
+
+          const validation = new validator(
+            { email, className, school, password },
+            {
               email: 'required|email',
               className: 'required',
               school: 'required',
               password: 'required|min:7',
+            }
+          );
+
+          if (validation.fails()) {
+            return res.status(400).json({
+              status: 400,
+              message: 'Validation failed',
+              errors: validation.errors.all(),
             });
-  
-            if (validation.fails()) {
-              return res.status(400).json({
-                status: 400,
-                message: 'Validation failed',
-                errors: validation.errors.all(),
-              });
-            }
-  
-            const existingStudent = await Student.findOne({ email });
-            if (existingStudent) {
-              return res.status(400).json({
-                status: 400,
-                message: 'Student with this email already exists',
-              });
-            }
-  
-            try {
-              const student = await Student.create({
-                id : 'placeholder',
-                email,
-                className,
-                school,
-                profilePic,
-                password,
-              }).fetch();
-              await sendWelcomeMessage(email)
-  
-              return res.status(201).json({
-                status: 201,
-                message: 'Student created',
-                data: student,
-              });
-            } catch (error) {
-              console.error('Database error:', error);
-              return res.status(500).json({
-                status: 500,
-                message: error.message || 'Server error',
-              });
-            }
           }
-        );
-      } catch (error) {
-        console.error('Outer error:', error);
-        return res.status(500).json({
-          status: 500,
-          message: error.message || 'Server error',
-        });
-      }
-    },
+
+          const existingStudent = await Student.findOne({ email });
+          if (existingStudent) {
+            return res.status(400).json({
+              status: 400,
+              message: 'Student with this email already exists',
+            });
+          }
+
+          try {
+            const student = await Student.create({
+              id: v4(),
+              email,
+              className,
+              school,
+              profilePic,
+              password,
+            }).fetch();
+
+            await redisClient.setEx(
+              `student:${student.id}`,
+              DEFAULT_TTL,
+              JSON.stringify(student)
+            );
+
+            try {
+              await sails.helpers.sendMail(email);
+              console.log('Welcome email sent successfully.');
+            } catch (error) {
+              console.error('Error while sending welcome email:', error);
+            }
+
+            return res.status(200).json({
+              status: 200,
+              message: 'Student created',
+              data: student,
+            });
+          } catch (error) {
+            console.error('Database error:', error);
+            return res.status(500).json({
+              status: 500,
+              message: error.message || 'Server error',
+            });
+          }
+        }
+      );
+    } catch (error) {
+      console.error('Outer error:', error);
+      return res.status(500).json({
+        status: 500,
+        message: error.message || 'Server error',
+      });
+    }
+  },
 };

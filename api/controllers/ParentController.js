@@ -1,4 +1,6 @@
-const validator = require('validatorjs');
+const { validator, redisClient, DEFAULT_TTL , v4} = sails.config.constant;
+
+
 module.exports = {
   create: async function (req, res) {
     try {
@@ -21,30 +23,47 @@ module.exports = {
       }
 
       const parent = await Parent.create({
-        id: 'placeholder',
+        id : v4(),
         email,
         name,
         relation,
         studentId,
       }).fetch();
 
+      await redisClient.setEx(
+        `parent:${parent.id}`,
+        DEFAULT_TTL,
+        JSON.stringify(parent)
+      );
+
       return res
         .status(200)
         .json({ status: 200, message: 'Parent created', data: parent });
     } catch (error) {
+      console.log(error.message);
+      
       return res
         .status(500)
-        .json({ status: 500, message: 'server Error in create student' });
+        .json({ status: 500, message: 'server Error in create parent' });
     }
   },
 
   getById: async function (req, res) {
     try {
-      const { parent_id } = req.params;
+      const parentId = req.params.id;
 
-      const parent = await Parent.find({
-        where : { id: parent_id }
-    });
+      const redisKey = `parent:${parentId}`;
+      const cachedParent = await redisClient.get(redisKey);
+
+      if (cachedParent) {
+        return res.status(200).json({
+          status: 200,
+          message: 'data fetched',
+          data: JSON.parse(cachedParent),
+        }); // Return cached data
+      }
+
+      const parent = await Parent.findOne({ id: parentId });
 
       if (!parent) {
         return res
@@ -52,12 +71,11 @@ module.exports = {
           .json({ status: 400, message: 'parent not found' });
       }
 
+      await redisClient.setEx(redisKey, DEFAULT_TTL , JSON.stringify(parent));
       return res
         .status(200)
         .json({ status: 200, message: 'Data fetched', data: parent });
     } catch (error) {
-      console.log(error.message);
-      
       return res
         .status(500)
         .json({ status: 500, message: error.message || 'Server error' });
@@ -66,7 +84,14 @@ module.exports = {
 
   getAll: async function (req, res) {
     try {
-      const parents = await Parent.find();
+      const { email } = req.query;
+      const criteria = {};
+
+      if (email) {
+        criteria.email = { contains: email };
+      }
+
+      const parents = await Parent.find(criteria);
 
       if (parents.length === 0) {
         return res.status(400).json({
@@ -74,6 +99,7 @@ module.exports = {
           message: 'No parents found',
         });
       }
+
 
       return res.status(200).json({
         status: 200,
@@ -89,9 +115,9 @@ module.exports = {
 
   update: async function (req, res) {
     try {
-      const { parent_id } = req.query;
+      const { parentId } = req.query;
 
-      if (!parent_id) {
+      if (!parentId) {
         return res
           .status(400)
           .json({ status: 400, message: 'Query parameter is required' });
@@ -113,17 +139,20 @@ module.exports = {
         });
       }
 
-      const parent = await Parent.findOne(parent_id);
+      const parent = await Parent.findOne(parentId);
       if (!parent) {
         return res
           .status(404)
           .json({ status: 404, message: 'parent not found' });
       }
 
-      const updates = {name, relation };
+      const updates = { name, relation };
 
-      await Parent.updateOne({ id: parent_id }).set(updates);
-      const updatedParent = await Parent.find(parent_id);
+      await Parent.updateOne({ id: parentId }).set(updates);
+      const updatedParent = await Parent.findOne({ id: parentId });
+
+      await redisClient.setEx(`parent:${parentId}`, DEFAULT_TTL, JSON.stringify(updatedParent));
+
       return res.json({
         status: 200,
         message: 'Parent updated',
@@ -138,21 +167,24 @@ module.exports = {
 
   delete: async function (req, res) {
     try {
-      const { parent_id } = req.query;
-      if (!parent_id) {
+      const { parentId } = req.query;
+      if (!parentId) {
         return res
           .status(400)
           .json({ status: 400, message: 'Query parameter is required' });
       }
 
-      const parent = await Parent.findOne(parent_id);
+      const parent = await Parent.findOne({ id: parentId });
       if (!parent) {
         return res
-          .status(404)
-          .json({ status: 404, message: 'parent not found' });
+          .status(400)
+          .json({ status: 400, message: 'parent not found' });
       }
 
-      const deletedParent = await Parent.destroy({ id: parent_id });
+      const deletedParent = await Parent.destroy({ id: parentId });
+
+      await redisClient.del(`parent:${parentId}`);
+
       return res.json({
         status: 200,
         message: 'parent deleted',

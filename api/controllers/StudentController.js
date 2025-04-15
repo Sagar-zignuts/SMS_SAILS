@@ -1,15 +1,11 @@
-const validator = require("validatorjs");
-const path = require("path");
-const { log } = require("console");
+const { validator, redisClient, DEFAULT_TTL, path,v4 } = sails.config.constant;
+
 
 module.exports = {
+
+  //create student
   create: async function (req, res) {
     try {
-      console.log('Initial req.body:', req.body); // Debug initial body
-      console.log('Initial route params:', Object.keys(req.params).length > 0 ? req.params : 'No route params'); // Debug route params
-      console.log('Initial all params:', req.allParams()); // Debug all params
-      console.log('Initial req.files:', req.file); // Debug file input
-
       let profilePic = null;
 
       // Handle file upload with Skipper
@@ -29,34 +25,26 @@ module.exports = {
           }
 
           if (uploadedFiles && uploadedFiles.length > 0) {
-            profilePic = path.relative(sails.config.appPath, uploadedFiles[0].fd);
+            profilePic = path.relative(
+              sails.config.appPath,
+              uploadedFiles[0].fd
+            );
           }
-
-          console.log('Post-upload req.body:', req.body); // Debug body after upload
-          console.log('Post-upload all params:', req.allParams()); // Debug all params
-
-          // Fallback to check raw multipart data
-          const form = req._fileparser.form;
-          form.on('field', (name, value) => {
-            console.log(`Raw multipart field: ${name} = ${value}`);
-            if (!req.body[name]) req.body[name] = value; // Populate missing fields
-          });
-
-          form.on('end', () => {
-            console.log('Multipart form parsing completed');
-          });
 
           const { email, className, school, password } = req.body;
 
-          const validation = new validator({ email, className, school, password }, {
-            email: 'required|email',
-            className: 'required',
-            school: 'required',
-            password: 'required|min:7',
-          });
+      
+          const validation = new validator(
+            { email, className, school, password },
+            {
+              email: 'required|email',
+              className: 'required',
+              school: 'required',
+              password: 'required|min:7',
+            }
+          );
 
           if (validation.fails()) {
-            console.log('Validation errors:', validation.errors.all());
             return res.status(400).json({
               status: 400,
               message: 'Validation failed',
@@ -74,7 +62,7 @@ module.exports = {
 
           try {
             const student = await Student.create({
-              id : 'placeholder',
+              id: v4(),
               email,
               className,
               school,
@@ -82,13 +70,26 @@ module.exports = {
               password,
             }).fetch();
 
-            return res.status(201).json({
-              status: 201,
+            await redisClient.setEx(
+              `student:${student.id}`,
+              DEFAULT_TTL,
+              JSON.stringify(student)
+            );
+
+            try {
+              await sails.helpers.sendMail(email)
+              console.log('Welcome email sent successfully.');
+            } catch (error) {
+              console.error('Error while sending welcome email:', error);
+            }
+
+            return res.status(200).json({
+              status: 200,
               message: 'Student created',
               data: student,
             });
           } catch (error) {
-            console.error('Database error:', error);
+            console.error(error);
             return res.status(500).json({
               status: 500,
               message: error.message || 'Server error',
@@ -107,46 +108,63 @@ module.exports = {
 
   getById: async function (req, res) {
     try {
-      const { student_id } = req.query;
+      const studentId = req.params.id;
+      const redisKey = `student:${studentId}`;
+      const cachedStudent = await redisClient.get(redisKey);
 
-      const student = await Student.findOne({ id: student_id });
+      if (cachedStudent) {
+        return res.status(200).json({
+          status: 200,
+          message: 'Data fetch',
+          data: JSON.parse(cachedStudent),
+        });
+      }
 
+      const student = await Student.findOne({ id: studentId });
       if (!student) {
         return res
           .status(400)
-          .json({ status: 400, message: "student not found" });
+          .json({ status: 400, message: 'student not found' });
       }
 
+      await redisClient.setEx(redisKey, DEFAULT_TTL, JSON.stringify(student));
       return res
         .status(200)
-        .json({ status: 200, message: "Data fetched", data: student });
+        .json({ status: 200, message: 'Data fetched', data: student });
     } catch (error) {
       return res
         .status(500)
-        .json({ status: 500, message: error.message || "Server error" });
+        .json({ status: 500, message: error.message || 'Server error' });
     }
   },
 
   getAll: async function (req, res) {
     try {
-      const students = await Student.find();
+      const { email } = req.query;
+      const criteria = {};
+
+      if (email) {
+        criteria.email = { contains: email };
+      }
+
+      const students = await Student.find(criteria);
 
       if (students.length === 0) {
         return res.status(400).json({
           status: 400,
-          message: "No students found with the given email",
+          message: 'No students found with the given email',
         });
       }
 
       return res.status(200).json({
         status: 200,
-        message: "Students retrieved successfully",
+        message: 'Students retrieved successfully',
         data: students,
       });
     } catch (error) {
       return res
         .status(500)
-        .json({ status: 500, message: error.message || "Server error" });
+        .json({ status: 500, message: error.message || 'Server error' });
     }
   },
 
@@ -154,19 +172,19 @@ module.exports = {
     try {
       const { className, school } = req.body;
       let profilePic;
-      const { student_id } = req.query;
+      const { studentId } = req.query;
 
-      if (!student_id) {
+      if (!studentId) {
         return res
           .status(400)
-          .json({ status: 400, message: "Query parameter is required" });
+          .json({ status: 400, message: 'Query parameter is required' });
       }
 
       const validation = new validator(
         { className, school },
         {
-          className: "required",
-          school: "required",
+          className: 'required',
+          school: 'required',
         }
       );
 
@@ -177,17 +195,17 @@ module.exports = {
         });
       }
 
-      req.file("profilePic").upload(
+      req.file('profilePic').upload(
         {
-          dirname: path.resolve(sails.config.appPath, "Uploads/profiles"),
+          dirname: path.resolve(sails.config.appPath, 'Uploads/profiles'),
           maxBytes: 5000000,
-          allowedFileTypes: ["image/jpeg", "image/jpg", "image/png"],
+          allowedFileTypes: ['image/jpeg', 'image/jpg', 'image/png'],
         },
         async (err, uploadedFiles) => {
           if (err) {
             return res.status(400).json({
               status: 400,
-              message: "File upload error: " + err.message,
+              message: 'File upload error: ' + err.message,
             });
           }
 
@@ -199,73 +217,82 @@ module.exports = {
           }
 
           try {
-            if (req.user.role === "student" && req.user.id !== student_id) {
+            if (req.user.role === 'student' && req.user.id !== studentId) {
               return res.status(403).json({
                 status: 403,
-                message: "You can only update your own profile",
+                message: 'You can only update your own profile',
               });
             }
 
-            const student = await Student.findOne(student_id);
+            const student = await Student.findOne(studentId);
             if (!student) {
               return res
                 .status(404)
-                .json({ status: 404, message: "Student not found" });
+                .json({ status: 404, message: 'Student not found' });
             }
 
             const updates = { className, school };
             if (profilePic) updates.profilePic = profilePic;
 
-            await Student.updateOne(student_id).set(updates);
+            await Student.updateOne(studentId).set(updates);
 
-            const updatedStudent = await Student.findOne(student_id);
+            const updatedStudent = await Student.findOne(studentId);
+
+            await redisClient.setEx(
+              `student:${studentId}`,
+              DEFAULT_TTL,
+              JSON.stringify(updatedStudent)
+            );
+
             return res.json({
               status: 200,
-              message: "Student updated",
+              message: 'Student updated',
               data: updatedStudent,
             });
           } catch (error) {
             return res
               .status(500)
-              .json({ status: 500, message: error.message || "Server error" });
+              .json({ status: 500, message: error.message || 'Server error' });
           }
         }
       );
     } catch (error) {
       return res
         .status(500)
-        .json({ status: 500, message: error.message || "Server error" });
+        .json({ status: 500, message: error.message || 'Server error' });
     }
   },
 
   delete: async function (req, res) {
     try {
-      const { student_id } = req.query;
-  
-      if (!student_id) {
+      const { studentId } = req.query;
+
+      if (!studentId) {
         return res
-      .status(400)
-      .json({ status: 400, message: "Query parameter is required" });
-    }
-  
-      const student = await Student.find({ id: student_id });
+          .status(400)
+          .json({ status: 400, message: 'Query parameter is required' });
+      }
+
+      const student = await Student.findOne({ id: studentId });
       if (!student) {
         return res
-          .status(404)
-          .json({ status: 404, message: "Student not found" });
+          .status(400)
+          .json({ status: 400, message: 'Student not found' });
       }
-  
-      const deletedStudent = await Student.destroy({ id: student_id });
-  
+
+      const deletedStudent = await Student.destroy({ id: studentId });
+
+      await redisClient.del(`student:${studentId}`);
+
       return res.json({
         status: 200,
-        message: "Student deleted",
+        message: 'Student deleted',
         deletedStudent,
       });
     } catch (error) {
       return res
         .status(500)
-        .json({ status: 500, message: error.message || "Server error" });
+        .json({ status: 500, message: error.message || 'Server error' });
     }
   },
 };

@@ -1,6 +1,6 @@
-//************************* 
-//  Just use to set admin details into the database and this will run before we starting the app.
-//*************************
+// // ************************* 
+// //  Just use to set admin details into the database and this will run before we starting the app.
+// // *************************
 
 // require('dotenv').config()
 
