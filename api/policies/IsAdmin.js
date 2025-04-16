@@ -1,5 +1,5 @@
 require('dotenv').config()
-const { jwt } = sails.config.constant;
+const { jwt ,roles} = sails.config.constant;
 
 //Check the token and if token is ok then check if the user is admin or not
 module.exports = async function (req, res, proceed) {
@@ -17,7 +17,7 @@ module.exports = async function (req, res, proceed) {
     req.user = decoder;
 
     //if user is admin then user can access the route
-    if (!req.user || req.user.role !== 'admin') {
+    if (!req.user || req.user.role !== roles.Admin) {
       return res
         .status(400)
         .json({ success: false, message: 'Required admin login' });

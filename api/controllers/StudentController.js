@@ -1,4 +1,4 @@
-const { validator, redisClient, DEFAULT_TTL, path,v4 } = sails.config.constant;
+const { validator, redisClient, DEFAULT_TTL, path,v4 ,roles} = sails.config.constant;
 
 
 module.exports = {
@@ -106,6 +106,7 @@ module.exports = {
     }
   },
 
+  //Get student by id by admin and student both
   getById: async function (req, res) {
     try {
       const studentId = req.params.id;
@@ -138,6 +139,7 @@ module.exports = {
     }
   },
 
+  //Get all student by admin and student
   getAll: async function (req, res) {
     try {
       const { email } = req.query;
@@ -168,6 +170,7 @@ module.exports = {
     }
   },
 
+  //Update student by admin only
   update: async function (req, res) {
     try {
       const { className, school } = req.body;
@@ -217,7 +220,7 @@ module.exports = {
           }
 
           try {
-            if (req.user.role === 'student' && req.user.id !== studentId) {
+            if (req.user.role === roles.Student && req.user.id !== studentId) {
               return res.status(403).json({
                 status: 403,
                 message: 'You can only update your own profile',
@@ -263,6 +266,7 @@ module.exports = {
     }
   },
 
+  //Delete  student by admin only
   delete: async function (req, res) {
     try {
       const { studentId } = req.query;

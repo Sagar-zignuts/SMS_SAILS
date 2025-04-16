@@ -32,6 +32,7 @@ module.exports = {
 
   primaryKey: 'id',
 
+  //It will automatically convert the password in hashed code before creating
   beforeCreate: async function (values, proceed) {
     values.password = await bcrypt.hash(values.password, 10);
     return proceed();

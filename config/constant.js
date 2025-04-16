@@ -21,6 +21,14 @@ redisClient.on('connect', () => console.log('Redis client connected successfully
   await redisClient.connect(); // Explicit connection for v4.x
 })();
 
+
+//Roles
+
+const roles = {
+  'Admin' : 'admin',
+  'Student' : 'student'
+}
+
 module.exports.constant = {
 validator,
 redisClient,
@@ -29,5 +37,6 @@ bcrypt,
 jwt,
 DEFAULT_TTL : 3600,
 nodemailer,
-v4
+v4,
+roles
 }

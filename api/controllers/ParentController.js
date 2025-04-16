@@ -2,6 +2,8 @@ const { validator, redisClient, DEFAULT_TTL , v4} = sails.config.constant;
 
 
 module.exports = {
+
+  //create parent by admin
   create: async function (req, res) {
     try {
       const { email, name, relation, studentId } = req.body;
@@ -22,6 +24,7 @@ module.exports = {
         });
       }
 
+      
       const parent = await Parent.create({
         id : v4(),
         email,
@@ -48,6 +51,7 @@ module.exports = {
     }
   },
 
+  //Get parent by admin and student both 
   getById: async function (req, res) {
     try {
       const parentId = req.params.id;
@@ -82,6 +86,8 @@ module.exports = {
     }
   },
 
+  //get all parents by admin and student 
+
   getAll: async function (req, res) {
     try {
       const { email } = req.query;
@@ -113,6 +119,7 @@ module.exports = {
     }
   },
 
+  //update the parent info by admin only
   update: async function (req, res) {
     try {
       const { parentId } = req.query;
@@ -165,6 +172,7 @@ module.exports = {
     }
   },
 
+  //Delete parents by admin only
   delete: async function (req, res) {
     try {
       const { parentId } = req.query;

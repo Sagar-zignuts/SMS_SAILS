@@ -1,7 +1,9 @@
-const {validator , path , bcrypt , jwt ,redisClient ,DEFAULT_TTL,v4} = sails.config.constant;
+const {validator , path , bcrypt , jwt ,redisClient ,DEFAULT_TTL,v4 , roles} = sails.config.constant;
 
 
 module.exports = {
+
+  //admin login 
   AdminLogin: async function (req, res) {
     try {
       const { email, password } = req.body;
@@ -41,7 +43,7 @@ module.exports = {
       const token = jwt.sign(
         {
           id: admin.id,
-          role: 'admin',
+          role: roles.Admin,
         },
         process.env.JWT_SECRET_KEY,
         { expiresIn: '1h' }
@@ -61,6 +63,8 @@ module.exports = {
         .json({ message: `Server error in login admin : ${error.message}` });
     }
   },
+
+  //student login
   StudentLogin: async function (req, res) {
     try {
       const { email, password } = req.body;
@@ -94,7 +98,7 @@ module.exports = {
       const token = jwt.sign(
         {
           id: student.id,
-          role: 'student',
+          role: roles.Student,
         },
         process.env.JWT_SECRET_KEY,
         { expiresIn: '1h' }
@@ -109,6 +113,7 @@ module.exports = {
     }
   },
 
+  //register student by student 
   StudentRegister: async function (req, res) {
     try {
       let profilePic = null;

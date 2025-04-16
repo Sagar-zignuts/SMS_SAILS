@@ -3,6 +3,7 @@ const { nodemailer } = sails.config.constant;
 
 require('dotenv').config();
 
+// Helper for sending mail
 
 module.exports = {
   friendlyName: 'Send Welcome Email',
